@@ -1,9 +1,14 @@
-var config = {
-    login : {
-        //Use to find your worksheet (On your Jira -> Tempo -> Tempo settings)
-        token: 'XXXXXXXXXX-us',
-        //Click on profile icon on the sidebar -> "Profile" link. In the URL you can find your accountId after the last "/" :
-        accountId: 'AAAAAAAAAAA',
+const config = {
+    loginAsana : {
+        // Use to find your worksheet (On Asana app https://app.asana.com/0/my-apps, create a PAT token)
+        token: "2/1206602XXXXXXXXXXXXXXXXXXXXXXX",
+        // Click on profile icon on the sidebar -> "Profile" link. In the URL you can find your accountId after the last "/" :
+        accountId: "1111111111111111111111",
+        organizationId: "1111111111111111111111"
+    },
+    loginHarvest: {
+        token: "1206602XXXXXXXXXXXXXXXXXXXXXXX",
+        account: "11111111"
     },
     info : {
         firstname: 'John',
@@ -30,4 +35,5 @@ var config = {
         }*/
     ]
 }
-module.exports = config;
+
+export default config

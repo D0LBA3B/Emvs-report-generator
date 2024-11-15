@@ -1,130 +1,101 @@
-var config = require('./config');
-const https = require('https');
-const moment = require('moment');
-const fs = require('fs');
-const Docxtemplater = require('docxtemplater');
-const cloudconvert = new (require('cloudconvert'))(config.login.cloudconvertKey);
+import fs from "fs";
+import moment from "moment";
+import Docxtemplater from "docxtemplater";
+import Asana from "asana";
+import config from "./config.js";
+import fetch from "node-fetch";
 
-// Dates
-var firstDay = moment();
-var lastDay = moment();
-//3ème
+globalThis.fetch = fetch;
+
+const client = Asana.ApiClient.instance;
+const token = client.authentications["token"];
+token.accessToken = config.loginAsana.token;
+
+
+let firstDay = moment();
+let lastDay = moment();
+
 if(config.info.year == 3) {
-    var firstDay = moment();
+    firstDay = moment();
     while (firstDay.day() !== 1) {
-        firstDay.subtract(1, 'd');
+        firstDay.subtract(1, "d");
     }
-    var lastDay = moment(firstDay);
+
+    lastDay = moment(firstDay);
     while (lastDay.day() !== 5) {
-        lastDay.add(1, 'd');
+        lastDay.add(1, "d");
     }
 } else {
-    //4ème
-    //firstDay = moment("20230731", "YYYYMMDD"); //custom day
-    firstDay.startOf('month');
-    lastDay = lastDay.endOf('month');
+    firstDay.startOf("month");
+    lastDay = lastDay.endOf("month");
 }
 
-//Variables
-if(config.info.year == 3) {
-config.info.week = "Semaine : mercredi " + firstDay.format('DD m YYYY') + ' au vendredi ' + lastDay.format('DD.MM.YYYY');
-} else {
-    config.info.week = "Mois : " + firstDay.format('DD.MM.YYYY') + ' - ' + lastDay.format('DD.MM.YYYY');
-}
-config.info.lastDay = lastDay.format('DD.MM.YYYY');
-config.info.name = config.info.firstname + ' ' + config.info.lastname;
-config.info.output = '/output/';
-config.info.exDocx = '.docx';
-config.info.exPdf = '.pdf';
-config.info.filename = config.info.lastname + '_' + config.info.firstname + '_journal_' + lastDay.format('YYYY-MM-DD') + '_' + config.info.company;
+config.info.week = firstDay.format("DD.MM.YYYY") + " - " + lastDay.format("DD.MM.YYYY");
+config.info.lastDay = lastDay.format("DD.MM.YYYY");
+config.info.name = config.info.firstname + " " + config.info.lastname;
+config.info.output = "/output/";
+config.info.exDocx = ".docx";
+config.info.exPdf = ".pdf";
+config.info.filename = config.info.lastname + "_" + config.info.firstname + "_journal_" + lastDay.format("YYYY-MM-DD") + "_" + config.info.company;
 
-//Date filter
-var filter = '?from='+firstDay.format('YYYY-MM-DD')+'&to='+lastDay.format('YYYY-MM-DD');
-console.log(firstDay.format('YYYY-MM-DD') + ";" + lastDay.format('YYYY-MM-DD'));
-var httpOptions = {
-    hostname: 'api.tempo.io',
-    port: 443,
-    path: '/core/3/worklogs/user/' + config.login.accountId + filter + '&limit=1000&addIssueSummary=true',
-    method: 'GET',
-    headers: {
-        Authorization: 'Bearer ' + config.login.token,
-        "Cache-Control": 'no-cache'
-    }
+
+const tasksApiInstance = new Asana.TasksApi();
+const tasksOpts = {
+    "assignee": config.loginAsana.accountId,
+    "workspace": config.loginAsana.organizationId,
+    "opt_fields": "actual_time_minutes,approval_status,assignee,assignee.name,assignee_section,assignee_section.name,assignee_status,completed,completed_at,completed_by,completed_by.name,created_at,created_by,created_by.name,custom_fields,custom_fields.estimated_duration,custom_fields.created_by,custom_fields.created_by.name,custom_fields.currency_code,custom_fields.custom_label,custom_fields.custom_label_position,custom_fields.date_value,custom_fields.date_value.date,custom_fields.date_value.date_time,custom_fields.description,custom_fields.display_value,custom_fields.enabled,custom_fields.enum_options,custom_fields.enum_options.color,custom_fields.enum_options.enabled,custom_fields.enum_options.name,custom_fields.enum_value,custom_fields.enum_value.color,custom_fields.enum_value.enabled,custom_fields.enum_value.name,custom_fields.format,custom_fields.has_notifications_enabled,custom_fields.is_formula_field,custom_fields.is_global_to_workspace,custom_fields.is_value_read_only,custom_fields.multi_enum_values,custom_fields.multi_enum_values.color,custom_fields.multi_enum_values.enabled,custom_fields.multi_enum_values.name,custom_fields.name,custom_fields.number_value,custom_fields.people_value,custom_fields.people_value.name,custom_fields.precision,custom_fields.resource_subtype,custom_fields.text_value,custom_fields.type,dependencies,dependents,due_at,due_on,external,external.data,followers,followers.name,hearted,hearts,hearts.user,hearts.user.name,html_notes,is_rendered_as_separator,liked,likes,likes.user,likes.user.name,memberships,memberships.project,memberships.project.name,memberships.section,memberships.section.name,modified_at,name,notes,num_hearts,num_likes,num_subtasks,offset,parent,parent.created_by,parent.name,parent.resource_subtype,path,permalink_url,projects,projects.name,resource_subtype,start_at,start_on,tags,tags.name,uri,workspace,workspace.name",
 };
 
-//Fetch Timesheet
-var req = https.request(httpOptions, (res) => {
-    if (res.statusCode != 200) {
-        console.error('Error while fetching the timesheet from Jira');
-        console.log('HTTP '+res.statusCode);
+const getHaverstTasks = async () => {
+    const res = await fetch(`https://api.harvestapp.com/api/v2/time_entries?from=${firstDay.format("YYYY-MM-DD")}T00:00:00Z&to=${lastDay.format("YYYY-MM-DD")}T00:00:00Z`, {
+        method: "GET",
+        headers: {
+            "Authorization": "Bearer " + config.loginHarvest.token,
+            "User-Agent": "Harvest API Example",
+            "Harvest-Account-ID": config.loginHarvest.account
+        }
+    });
+
+    const data = await res.json();
+    return data.time_entries;
+}
+
+const getTasks = async () => {
+    const harvestTasks = await getHaverstTasks();
+    const asanaTasks = await tasksApiInstance.getTasks(tasksOpts);
+
+    const tasks = harvestTasks.map(harvestTask => {
+        const asanaTask = asanaTasks.data.find(a => a.gid == harvestTask.external_reference?.id);
+        const n = new Date(0, 0);
+        n.setSeconds(harvestTask.rounded_hours * 60 * 60);
         
-        process.exit(1);
-    }
-    var data = '';
-
-    res.on('data', (chunk) => {
-        data += chunk;
+        return {
+            date: moment(harvestTask.spent_date).format("DD.MM.YYYY"),
+            title: harvestTask.task.name,
+            description: [{ line: harvestTask.notes }],
+            duration: n.toTimeString().slice(0, 5).replace(":", "h"),
+            responsible: asanaTask?.created_by.name || config.info.companyResponsible
+        }
     });
 
-    res.on('end', () => {
-        toDocx(JSON.parse(data));
-    });
-});
-req.end();
+    return tasks;
+}
 
-req.on('error', (e) => {
-    console.error(e);
-});
-
-var toDocx = function(timesheet) {
-    var template = fs.readFileSync(__dirname + '/template.docx', 'binary');
-    var doc = new Docxtemplater(template);
+(async () => {
+    const template = fs.readFileSync(process.cwd() + "/template.docx", "binary");
+    const doc = new Docxtemplater(template);
     
-    var tasks = [];
-
-    //console.log(timesheet);
-    //console.log(timesheet.results);
-    //Only for the "results" part of the JSON
-    for(var i = 0; i < timesheet.results.length; i++)
-    {
-        var duration = moment.duration(timesheet.results[i].timeSpentSeconds*1000);
-
-        tasks.push({
-            date: moment(timesheet.results[i].startDate).format('DD.MM.YYYY'),
-            title: timesheet.results[i].issue.key,
-            description: timesheet.results[i].description.split('\n').map((line) => {return {line: line}}),
-            //duration: moment.duration(entry.timeSpent*1000).humanize(),
-            duration: Math.floor(duration.asHours()) + 'h' + moment.utc(duration.asMilliseconds()).format("mm"),
-            responsible: config.info.companyResponsible,
-            sortIndex: moment(timesheet.results[i].startDate).format('x')
-        });
-    }
-
-    //Recurring tasks add in the config.js
-    config.recurringTasks.forEach(function(task) {
-        var date = moment(firstDay).add(task.day - 1, 'd');
-        tasks.push({
-            date: date.format('DD.MM.YYYY'),
-            title: task.title,
-            description: task.description.split('\n').map((line) => {return {line: line}}),
-            duration: task.duration,
-            responsible: '',
-            sortIndex: date.format('x')
-        });
-    });
+    const tasks = await getTasks();
     
-    config.info.tasks = tasks.sort((a, b) => a.sortIndex - b.sortIndex);
+    config.info.tasks = tasks.sort((a, b) => new Date(a.date) - new Date(b.date));
     
-    //Insert the data in the Word template
     doc.setData(config.info);
     
     doc.render();
     
-    var buf = doc.getZip().generate({type: 'nodebuffer'});
+    const buf = doc.getZip().generate({ type: "nodebuffer" });
     
-    fs.writeFileSync(__dirname + config.info.output + config.info.filename + config.info.exDocx, buf);
-    console.log('"'+ config.info.filename + config.info.exDocx + '" generated');
+    fs.writeFileSync(process.cwd() + config.info.output + config.info.filename + config.info.exDocx, buf);
     
-    process.exit();
-    
-}
+    console.log(`\x1b[34m"${config.info.filename + config.info.exDocx}" \x1b[32mgenerated \x1b[0m`);
+})();
