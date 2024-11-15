@@ -1,0 +1,21 @@
+{
+  "name": "jira-to-emvs-compliant-report",
+  "version": "1.0.1",
+  "description": "Create an EMVS compliant report from your Jira worksheet",
+  "main": "app.js",
+  "scripts": {},
+  "author": {
+    "name": "Dolba"
+  },
+  "contributors": [],
+  "dependencies": {
+    "cloudconvert": "^2.2.4",
+    "docxtemplater": "^2.0.0",
+    "moment": "^2.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/D0LBA3B/Emvs-report-generator.git"
+  },
+  "license": "ISC"
+}
